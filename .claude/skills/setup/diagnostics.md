@@ -9,8 +9,6 @@ uname -m
 node -p "process.versions.node.split('.')[0]"
 ```
 
-Check if the user migrated from OpenClaw during this setup session (i.e. `/migrate-from-openclaw` was invoked). If you're unsure (e.g. after context compaction), check for `migration-state.md` in the project root — it exists during and sometimes after migration.
-
 Write `/tmp/nanoclaw-diagnostics.json`. No paths, usernames, hostnames, or IP addresses.
 
 ```json
@@ -25,7 +23,6 @@ Write `/tmp/nanoclaw-diagnostics.json`. No paths, usernames, hostnames, or IP ad
     "arch": "arm64",
     "node_major_version": 22,
     "channels_selected": ["telegram", "whatsapp"],
-    "migrated_from_openclaw": false,
     "error_count": 0,
     "failed_step": null
   }

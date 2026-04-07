@@ -1,0 +1,144 @@
+#!/bin/bash
+# pdf-reader — Extract text from PDF files using pdftotext (poppler-utils)
+#
+# Usage:
+#   pdf-reader <file-path>              Extract text from a local PDF
+#   pdf-reader fetch <url>              Download and extract text from a URL
+#   pdf-reader info <file-path>         Show PDF metadata (page count, etc.)
+#
+# Exit codes:
+#   0 — Success
+#   1 — Error (missing file, invalid PDF, no text extracted, etc.)
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+error() {
+  echo -e "${RED}Error: $1${NC}" >&2
+  exit 1
+}
+
+warn() {
+  echo -e "${YELLOW}Warning: $1${NC}" >&2
+}
+
+usage() {
+  echo "Usage:"
+  echo "  pdf-reader <file-path>              Extract text from a local PDF"
+  echo "  pdf-reader fetch <url>              Download and extract text from a URL"
+  echo "  pdf-reader info <file-path>         Show PDF metadata (page count, etc.)"
+  exit 1
+}
+
+# Check dependencies
+check_deps() {
+  command -v pdftotext >/dev/null 2>&1 || error "pdftotext not found. Install poppler-utils: apt-get install poppler-utils"
+  command -v pdfinfo >/dev/null 2>&1 || error "pdfinfo not found. Install poppler-utils: apt-get install poppler-utils"
+}
+
+# Extract text from a local PDF
+extract_text() {
+  local file="$1"
+
+  [ -f "$file" ] || error "File not found: $file"
+
+  # Verify it's a PDF
+  local header
+  header=$(head -c 5 "$file" 2>/dev/null) || error "Cannot read file: $file"
+  if [[ "$header" != "%PDF-"* ]]; then
+    error "Not a PDF file: $file"
+  fi
+
+  # Get page count
+  local pages
+  pages=$(pdfinfo "$file" 2>/dev/null | grep "^Pages:" | awk '{print $2}') || pages="unknown"
+
+  # Extract text
+  local tmpfile
+  tmpfile=$(mktemp /tmp/pdf-text-XXXXXX.txt)
+
+  pdftotext -layout "$file" "$tmpfile" 2>/dev/null || error "Failed to extract text from PDF"
+
+  local size
+  size=$(wc -c < "$tmpfile" | tr -d ' ')
+
+  if [ "$size" -eq 0 ]; then
+    rm -f "$tmpfile"
+    warn "PDF contains no extractable text. It may be a scanned image-based PDF."
+    warn "Try using agent-browser to view the PDF visually instead."
+    exit 1
+  fi
+
+  echo "=== PDF: $(basename "$file") ==="
+  echo "=== Pages: $pages ==="
+  echo "=== Text size: $size bytes ==="
+  echo ""
+  cat "$tmpfile"
+  rm -f "$tmpfile"
+}
+
+# Download PDF from URL and extract text
+fetch_pdf() {
+  local url="$1"
+  local tmpfile
+  tmpfile=$(mktemp /tmp/pdf-fetch-XXXXXX.pdf)
+
+  echo "Downloading PDF from: $url" >&2
+  command -v curl >/dev/null 2>&1 || error "curl not found"
+
+  if ! curl -sSL --max-time 60 --connect-timeout 15 -o "$tmpfile" "$url"; then
+    rm -f "$tmpfile"
+    error "Failed to download PDF from URL"
+  fi
+
+  local size
+  size=$(wc -c < "$tmpfile" | tr -d ' ')
+  if [ "$size" -lt 100 ]; then
+    rm -f "$tmpfile"
+    error "Downloaded file is too small ($size bytes). Not a valid PDF."
+  fi
+
+  # Extract text from downloaded file
+  extract_text "$tmpfile"
+  rm -f "$tmpfile"
+}
+
+# Show PDF metadata
+show_info() {
+  local file="$1"
+  [ -f "$file" ] || error "File not found: $file"
+
+  local header
+  header=$(head -c 5 "$file" 2>/dev/null) || error "Cannot read file: $file"
+  if [[ "$header" != "%PDF-"* ]]; then
+    error "Not a PDF file: $file"
+  fi
+
+  pdfinfo "$file" 2>/dev/null || error "Failed to read PDF metadata"
+}
+
+# Main
+check_deps
+
+case "${1:-}" in
+  fetch)
+    [ -n "${2:-}" ] || error "URL required. Usage: pdf-reader fetch <url>"
+    fetch_pdf "$2"
+    ;;
+  info)
+    [ -n "${2:-}" ] || error "File path required. Usage: pdf-reader info <file-path>"
+    show_info "$2"
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  "")
+    error "File path required. Usage: pdf-reader <file-path>"
+    ;;
+  *)
+    extract_text "$1"
+    ;;
+esac
