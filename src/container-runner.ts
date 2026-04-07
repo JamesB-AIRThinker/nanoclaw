@@ -76,7 +76,7 @@ function buildVolumeMounts(
       containerPath: '/workspace/project',
       readonly: true,
     });
-/*
+    /*
     // Shadow .env so the agent cannot read secrets from the mounted project root.
     // Credentials are injected by the credential proxy, never exposed to containers.
     const envFile = path.join(projectRoot, '.env');
@@ -425,18 +425,18 @@ export async function runContainerAgent(
         { group: group.name, containerName },
         'Container timeout, stopping gracefully',
       );
-	  try {
-	          stopContainer(containerName);
-	        } catch (err) {
-	          logger.warn(
-	            { group: group.name, containerName, err },
-	            'Graceful stop failed, force killing',
-	          );
-	          container.kill('SIGKILL');
-	        }
-	      };
+      try {
+        stopContainer(containerName);
+      } catch (err) {
+        logger.warn(
+          { group: group.name, containerName, err },
+          'Graceful stop failed, force killing',
+        );
+        container.kill('SIGKILL');
+      }
+    };
 
-	      let timeout = setTimeout(killOnTimeout, timeoutMs);
+    let timeout = setTimeout(killOnTimeout, timeoutMs);
 
     // Reset the timeout whenever there's activity (streaming output)
     const resetTimeout = () => {

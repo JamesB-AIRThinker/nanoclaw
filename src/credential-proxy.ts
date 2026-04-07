@@ -38,12 +38,12 @@ function isOpenRouterHostname(hostname: string): boolean {
 }
 
 function isLocalHost(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  return (
+    hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+  );
 }
 
-function isOpenRouterAuthTarget(
-  upstreamUrl: URL,
-): boolean {
+function isOpenRouterAuthTarget(upstreamUrl: URL): boolean {
   return isOpenRouterHostname(upstreamUrl.hostname);
 }
 
@@ -54,7 +54,9 @@ function isOpenRouterTranslationTarget(
   if (isOpenRouterAuthTarget(upstreamUrl)) return true;
   // Allow local test/proxy setups that emulate OpenRouter while still requiring
   // explicit OpenRouter credentials to avoid false positives on Anthropic.
-  return isLocalHost(upstreamUrl.hostname) && Boolean(secrets.OPENROUTER_API_KEY);
+  return (
+    isLocalHost(upstreamUrl.hostname) && Boolean(secrets.OPENROUTER_API_KEY)
+  );
 }
 
 function resolveAuthMode(
@@ -72,7 +74,9 @@ function resolveAuthMode(
 
 function buildUpstreamPath(upstream: URL, incomingPath: string): string {
   const basePath = upstream.pathname?.replace(/\/+$/, '') || '';
-  const reqPath = incomingPath.startsWith('/') ? incomingPath : `/${incomingPath}`;
+  const reqPath = incomingPath.startsWith('/')
+    ? incomingPath
+    : `/${incomingPath}`;
   if (!basePath || basePath === '/') return reqPath;
   return `${basePath}${reqPath}`;
 }
@@ -145,7 +149,8 @@ function shouldTranslateToOpenRouterChat(
   upstreamUrl: URL,
   secrets: Record<string, string>,
 ): body is JsonObject {
-  if (!isMessagesEndpoint(req.url) || req.method !== 'POST' || !body) return false;
+  if (!isMessagesEndpoint(req.url) || req.method !== 'POST' || !body)
+    return false;
   if (!isOpenRouterUpstream(upstreamUrl, secrets)) return false;
 
   const model = typeof body.model === 'string' ? body.model : '';
@@ -159,7 +164,9 @@ function normalizeContentBlocks(content: JsonValue | undefined): JsonObject[] {
     return content ? [{ type: 'text', text: content }] : [];
   }
   return Array.isArray(content)
-    ? content.filter((item): item is JsonObject => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
+    ? content.filter((item): item is JsonObject =>
+        Boolean(item && typeof item === 'object' && !Array.isArray(item)),
+      )
     : [];
 }
 
@@ -170,7 +177,8 @@ function stringifyTextContent(content: JsonValue | undefined): string {
   return content
     .map((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return '';
-      if (item.type === 'text' && typeof item.text === 'string') return item.text;
+      if (item.type === 'text' && typeof item.text === 'string')
+        return item.text;
       return '';
     })
     .join('');
@@ -210,12 +218,17 @@ function convertAnthropicMessagesToOpenRouter(body: JsonObject): JsonObject[] {
 
         if (block.type === 'tool_use' && typeof block.name === 'string') {
           toolCalls.push({
-            id: typeof block.id === 'string' ? block.id : `tool_${toolCalls.length}`,
+            id:
+              typeof block.id === 'string'
+                ? block.id
+                : `tool_${toolCalls.length}`,
             type: 'function',
             function: {
               name: block.name,
               arguments: JSON.stringify(
-                block.input && typeof block.input === 'object' ? block.input : {},
+                block.input && typeof block.input === 'object'
+                  ? block.input
+                  : {},
               ),
             },
           });
@@ -239,7 +252,11 @@ function convertAnthropicMessagesToOpenRouter(body: JsonObject): JsonObject[] {
       pendingText = '';
     };
 
-    if (blocks.length === 0 && typeof entry.content === 'string' && entry.content) {
+    if (
+      blocks.length === 0 &&
+      typeof entry.content === 'string' &&
+      entry.content
+    ) {
       messages.push({ role: 'user', content: entry.content });
       continue;
     }
@@ -250,7 +267,10 @@ function convertAnthropicMessagesToOpenRouter(body: JsonObject): JsonObject[] {
         continue;
       }
 
-      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+      if (
+        block.type === 'tool_result' &&
+        typeof block.tool_use_id === 'string'
+      ) {
         flushUserText();
         messages.push({
           role: 'tool',
@@ -269,7 +289,11 @@ function convertAnthropicMessagesToOpenRouter(body: JsonObject): JsonObject[] {
 function convertAnthropicToolChoice(
   toolChoice: JsonValue | undefined,
 ): JsonValue | undefined {
-  if (!toolChoice || typeof toolChoice !== 'object' || Array.isArray(toolChoice)) {
+  if (
+    !toolChoice ||
+    typeof toolChoice !== 'object' ||
+    Array.isArray(toolChoice)
+  ) {
     return toolChoice;
   }
 
@@ -285,7 +309,9 @@ function convertAnthropicToolChoice(
   return toolChoice;
 }
 
-function compactObject(object: Record<string, JsonValue | undefined>): JsonObject {
+function compactObject(
+  object: Record<string, JsonValue | undefined>,
+): JsonObject {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => value !== undefined),
   ) as JsonObject;
@@ -305,7 +331,8 @@ function buildOpenRouterChatBody(body: JsonObject): JsonObject {
     stop: body.stop_sequences,
     tools: Array.isArray(body.tools)
       ? body.tools.map((tool) => {
-          if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return tool;
+          if (!tool || typeof tool !== 'object' || Array.isArray(tool))
+            return tool;
           return compactObject({
             type: 'function',
             function: compactObject({
@@ -353,11 +380,16 @@ function mapFinishReason(reason: unknown): string | null {
 }
 
 function convertOpenRouterResponseToAnthropic(body: JsonObject): JsonObject {
-  const choice = Array.isArray(body.choices) && body.choices[0] && typeof body.choices[0] === 'object'
-    ? (body.choices[0] as JsonObject)
-    : {};
+  const choice =
+    Array.isArray(body.choices) &&
+    body.choices[0] &&
+    typeof body.choices[0] === 'object'
+      ? (body.choices[0] as JsonObject)
+      : {};
   const message =
-    choice.message && typeof choice.message === 'object' && !Array.isArray(choice.message)
+    choice.message &&
+    typeof choice.message === 'object' &&
+    !Array.isArray(choice.message)
       ? (choice.message as JsonObject)
       : {};
   const contentBlocks: JsonObject[] = [];
@@ -368,15 +400,21 @@ function convertOpenRouterResponseToAnthropic(body: JsonObject): JsonObject {
 
   if (Array.isArray(message.tool_calls)) {
     for (const toolCall of message.tool_calls) {
-      if (!toolCall || typeof toolCall !== 'object' || Array.isArray(toolCall)) continue;
+      if (!toolCall || typeof toolCall !== 'object' || Array.isArray(toolCall))
+        continue;
       const fn =
-        toolCall.function && typeof toolCall.function === 'object' && !Array.isArray(toolCall.function)
+        toolCall.function &&
+        typeof toolCall.function === 'object' &&
+        !Array.isArray(toolCall.function)
           ? (toolCall.function as JsonObject)
           : {};
       if (typeof fn.name !== 'string') continue;
       contentBlocks.push({
         type: 'tool_use',
-        id: typeof toolCall.id === 'string' ? toolCall.id : `tool_${contentBlocks.length}`,
+        id:
+          typeof toolCall.id === 'string'
+            ? toolCall.id
+            : `tool_${contentBlocks.length}`,
         name: fn.name,
         input: parseToolArguments(fn.arguments),
       });
@@ -400,7 +438,9 @@ function convertOpenRouterResponseToAnthropic(body: JsonObject): JsonObject {
       input_tokens:
         typeof usage.prompt_tokens === 'number' ? usage.prompt_tokens : 0,
       output_tokens:
-        typeof usage.completion_tokens === 'number' ? usage.completion_tokens : 0,
+        typeof usage.completion_tokens === 'number'
+          ? usage.completion_tokens
+          : 0,
     },
   };
 }
@@ -419,12 +459,14 @@ function writeAnthropicStreamingResponse(
   anthropicMessage: JsonObject,
 ): void {
   const content = Array.isArray(anthropicMessage.content)
-    ? anthropicMessage.content.filter(
-        (block): block is JsonObject => Boolean(block && typeof block === 'object' && !Array.isArray(block)),
+    ? anthropicMessage.content.filter((block): block is JsonObject =>
+        Boolean(block && typeof block === 'object' && !Array.isArray(block)),
       )
     : [];
   const usage =
-    anthropicMessage.usage && typeof anthropicMessage.usage === 'object' && !Array.isArray(anthropicMessage.usage)
+    anthropicMessage.usage &&
+    typeof anthropicMessage.usage === 'object' &&
+    !Array.isArray(anthropicMessage.usage)
       ? (anthropicMessage.usage as JsonObject)
       : {};
 
@@ -515,7 +557,11 @@ function forwardRequest(
   makeRequest: typeof httpsRequest | typeof httpRequest,
   options: RequestOptions,
   body: Buffer,
-): Promise<{ statusCode: number; headers: IncomingMessage['headers']; body: Buffer }> {
+): Promise<{
+  statusCode: number;
+  headers: IncomingMessage['headers'];
+  body: Buffer;
+}> {
   return new Promise((resolve, reject) => {
     const upstream = makeRequest(options, (upRes) => {
       const chunks: Buffer[] = [];
@@ -619,7 +665,9 @@ export function startCredentialProxy(
         const body = Buffer.concat(chunks);
         const bodyJson = safeJsonParse(body);
 
-        if (shouldTranslateToOpenRouterChat(req, bodyJson, upstreamUrl, secrets)) {
+        if (
+          shouldTranslateToOpenRouterChat(req, bodyJson, upstreamUrl, secrets)
+        ) {
           handleTranslatedOpenRouterRequest(
             req,
             res,
@@ -629,7 +677,10 @@ export function startCredentialProxy(
             secrets,
             bodyJson,
           ).catch((err) => {
-            logger.error({ err, url: req.url }, 'Credential proxy translation error');
+            logger.error(
+              { err, url: req.url },
+              'Credential proxy translation error',
+            );
             if (!res.headersSent) {
               res.writeHead(502);
               res.end('Bad Gateway');
